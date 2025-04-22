@@ -6,7 +6,7 @@
 const CONFIG = {
     // Configurações padrão
     DEFAULTS: {
-        APP_ID: "1831830",            // ID do Chessarama
+        APP_ID: "",                   // Sem ID padrão
         REVIEWS_PER_PAGE: 20,         // Número de reviews por página
         THEME: "dark",                // Tema padrão
         LANGUAGE: "all",              // Idioma padrão

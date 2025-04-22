@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Adicionar função auxiliar para formatação de tempo
         window.formatPlaytime = function(minutes) {
+            if (isNaN(minutes)) minutes = 0;
             const hours = Math.floor(minutes / 60);
             const mins = minutes % 60;
             return `${hours}h ${mins}m`;
@@ -149,7 +150,7 @@ document.addEventListener('keydown', function(event) {
     // Ctrl+Shift+F: Limpar formulários
     if (event.ctrlKey && event.shiftKey && event.key === 'F') {
         event.preventDefault();
-        document.getElementById('appId').value = CONFIG.DEFAULTS.APP_ID;
+        document.getElementById('appId').value = '';
         document.getElementById('filter').value = 'all';
         document.getElementById('language').value = 'all';
         document.getElementById('review_type').value = 'all';

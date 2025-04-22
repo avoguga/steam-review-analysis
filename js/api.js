@@ -4,6 +4,33 @@
  */
 
 const API = {
+    // Variáveis para manter o estado da paginação
+    paginationState: {
+        totalReviews: 0,     // Total de reviews disponíveis
+        totalPositive: 0,    // Total de reviews positivas
+        totalNegative: 0,    // Total de reviews negativas
+        currentPage: 0,      // Página atual
+        hasNextPage: true,   // Indica se há mais páginas
+        appId: "",           // ID do app atual
+        accumulatedReviews: [] // Todas as reviews acumuladas
+    },
+    
+    /**
+     * Reseta o estado da paginação
+     * @param {string} appId - ID do aplicativo
+     */
+    resetPaginationState(appId) {
+        this.paginationState = {
+            totalReviews: 0,
+            totalPositive: 0,
+            totalNegative: 0,
+            currentPage: 0,
+            hasNextPage: true,
+            appId: appId,
+            accumulatedReviews: []
+        };
+    },
+    
     /**
      * Busca reviews do Steam usando alternativas para contornar CORS
      * @param {string} appId - ID do aplicativo Steam
@@ -12,6 +39,14 @@ const API = {
      */
     async fetchSteamReviews(appId, params = {}) {
         try {
+            // Se é a primeira requisição ou se o ID do app mudou, reseta o estado
+            if (params.cursor === "*" || this.paginationState.appId !== appId) {
+                this.resetPaginationState(appId);
+            }
+            
+            // Incrementa a página atual
+            this.paginationState.currentPage++;
+            
             // Parâmetros padrão
             const defaultParams = {
                 json: 1,
@@ -39,13 +74,45 @@ const API = {
             // Em vez de tentar acessar diretamente a API do Steam,
             // vamos simular dados para fins de demonstração
             
-            console.log("Simulando chamada à API do Steam:", fullUrl);
+            console.log(`[Página ${this.paginationState.currentPage}] Simulando chamada à API do Steam:`, fullUrl);
             
             // Simular uma pequena latência de rede
             await new Promise(resolve => setTimeout(resolve, 500));
             
-            // Retornar dados simulados
-            return this.generateMockSteamReviews(appId, queryParams);
+            // Gerar dados simulados
+            const pageData = this.generateMockSteamReviews(appId, queryParams);
+            
+            // Se for a primeira página, definir os totais
+            if (params.cursor === "*") {
+                this.paginationState.totalPositive = pageData.query_summary.total_positive;
+                this.paginationState.totalNegative = pageData.query_summary.total_negative;
+                this.paginationState.totalReviews = pageData.query_summary.total_reviews;
+            }
+            
+            // Acumular as reviews
+            this.paginationState.accumulatedReviews = [
+                ...this.paginationState.accumulatedReviews,
+                ...pageData.reviews
+            ];
+            
+            // Verificar se há mais páginas
+            this.paginationState.hasNextPage = !!pageData.cursor;
+            
+            // Criar uma cópia dos dados com as informações acumuladas
+            const accumulatedData = {
+                ...pageData,
+                reviews: this.paginationState.accumulatedReviews,
+                query_summary: {
+                    ...pageData.query_summary,
+                    num_reviews: this.paginationState.accumulatedReviews.length,
+                    // Manter os totais consistentes
+                    total_positive: this.paginationState.totalPositive,
+                    total_negative: this.paginationState.totalNegative,
+                    total_reviews: this.paginationState.totalReviews
+                }
+            };
+            
+            return accumulatedData;
         } catch (error) {
             console.error("Erro ao buscar reviews do Steam:", error);
             throw error;
@@ -70,6 +137,7 @@ const API = {
         let forcePositive = params.review_type === 'positive';
         let forceNegative = params.review_type === 'negative';
         
+        const now = Math.floor(Date.now() / 1000);
         for (let i = 0; i < reviewCount; i++) {
             // Determinar se será positiva ou negativa
             let isPositive;
@@ -94,7 +162,6 @@ const API = {
             }
             
             // Gerar timestamp (últimos 90 dias)
-            const now = Math.floor(Date.now() / 1000);
             const ninetyDaysAgo = now - (90 * 24 * 60 * 60);
             const timestamp = Math.floor(Math.random() * (now - ninetyDaysAgo)) + ninetyDaysAgo;
             
@@ -137,27 +204,18 @@ const API = {
             });
         }
         
-        // Calcular totais para o resumo
-        let totalPositive, totalNegative;
-        if (params.review_type === 'positive') {
-            totalPositive = Math.floor(Math.random() * 1000) + 500;
-            totalNegative = Math.floor(Math.random() * 200) + 50;
-        } else if (params.review_type === 'negative') {
-            totalPositive = Math.floor(Math.random() * 500) + 200;
-            totalNegative = Math.floor(Math.random() * 500) + 100;
-        } else {
-            totalPositive = Math.floor(Math.random() * 1000) + 500;
-            totalNegative = Math.floor(Math.random() * 300) + 50;
-        }
+        // Na primeira página, gerar totais globais - usando valores fixos para demonstração
+        let totalPositive = 710;
+        let totalNegative = 191;
+        let totalReviews = totalPositive + totalNegative;
         
-        // Gerar cursor para paginação
+        // Gerar cursor para paginação, exceto na última página
         let nextCursor = "";
-        // Se este não é o primeiro conjunto, chance de 70% de ter mais páginas
-        if (params.cursor !== "*" && Math.random() < 0.7) {
-            nextCursor = "nextpage_" + Math.floor(Math.random() * 1000);
-        } 
-        // Se este é o primeiro conjunto, 90% de chance de ter mais páginas
-        else if (params.cursor === "*") {
+        
+        // Decidir se haverá mais páginas
+        const isLastPage = this.paginationState.currentPage >= 5; // Limite em 5 páginas para demonstração
+        
+        if (!isLastPage) {
             nextCursor = "nextpage_" + Math.floor(Math.random() * 1000);
         }
         
@@ -170,7 +228,7 @@ const API = {
                 review_score_desc: "Muito Positivo",
                 total_positive: totalPositive,
                 total_negative: totalNegative,
-                total_reviews: totalPositive + totalNegative
+                total_reviews: totalReviews
             },
             reviews: reviews,
             cursor: nextCursor

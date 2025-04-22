@@ -8,7 +8,7 @@ const UI = {
     state: {
         reviewsData: [],           // Dados de reviews carregados
         reviewsCursor: "*",        // Cursor para paginação
-        currentAppId: CONFIG.DEFAULTS.APP_ID,  // ID do app atual
+        currentAppId: "",          // ID do app atual
         aiProvider: CONFIG.DEFAULTS.AI_PROVIDER,  // Provedor de IA
         apiKey: "",                // Chave de API do usuário
         aiModel: CONFIG.DEFAULTS.AI_MODEL,  // Modelo de IA
@@ -23,6 +23,9 @@ const UI = {
         
         // Carregar configurações salvas
         this.loadSettings();
+        
+        // Atualizar dropdown de modelos com base no provedor atual
+        this.updateModelDropdown(this.state.aiProvider);
         
         // Inicializar event listeners
         this.initEventListeners();
@@ -53,9 +56,22 @@ const UI = {
      */
     initEventListeners() {
         // Botões principais
-        document.getElementById('getReviews').addEventListener('click', () => this.fetchReviews());
+        document.getElementById('getReviews').addEventListener('click', () => {
+            // Resetar dados quando o botão principal for clicado
+            this.state.reviewsData = [];
+            this.state.reviewsCursor = "*";
+            document.getElementById('reviewsTable').querySelector('tbody').innerHTML = '';
+            this.fetchReviews();
+        });
+        
         document.getElementById('loadMore').addEventListener('click', () => this.loadMoreReviews());
         document.getElementById('saveToExcel').addEventListener('click', () => EXPORT.toExcel(this.state.reviewsData));
+        
+        // Adicionar evento para atualizar o dropdown de modelos quando o provedor muda
+        document.getElementById('aiProvider').addEventListener('change', (e) => {
+            this.state.aiProvider = e.target.value;
+            this.updateModelDropdown(this.state.aiProvider);
+        });
         
         // Configurações de IA
         document.getElementById('saveApiSettings').addEventListener('click', () => this.saveApiSettings());
@@ -86,6 +102,40 @@ const UI = {
                 document.getElementById('reviewModal').style.display = 'none';
             }
         });
+    },
+    
+    /**
+     * Popula o dropdown de modelos de IA com base no provedor selecionado
+     * @param {string} provider - Provedor de IA ('openai' ou 'anthropic')
+     */
+    updateModelDropdown(provider) {
+        const modelDropdown = document.getElementById('aiModel');
+        if (!modelDropdown) return;
+        
+        // Limpar dropdown atual
+        modelDropdown.innerHTML = '';
+        
+        // Obter lista de modelos baseado no provedor
+        const modelsList = provider === 'openai' 
+            ? CONFIG.AI_MODELS.OPENAI 
+            : CONFIG.AI_MODELS.ANTHROPIC;
+        
+        // Adicionar opções ao dropdown
+        modelsList.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model.id;
+            option.textContent = model.name;
+            modelDropdown.appendChild(option);
+        });
+        
+        // Selecionar modelo padrão adequado
+        if (provider === 'openai') {
+            this.state.aiModel = CONFIG.AI_MODELS.OPENAI[0].id;
+        } else {
+            this.state.aiModel = CONFIG.AI_MODELS.ANTHROPIC[0].id;
+        }
+        
+        modelDropdown.value = this.state.aiModel;
     },
     
     /**
@@ -196,20 +246,22 @@ const UI = {
     
     /**
      * Busca reviews do Steam
+     * Com a nova abordagem, usamos o API.js que gerencia a paginação e acumulação de dados
      */
     async fetchReviews() {
         try {
             // Mostrar loader
             document.getElementById('reviewsLoader').style.display = 'block';
             
-            // Limpar tabela e resetar cursor para primeira página
-            if (this.state.reviewsCursor === "*") {
-                document.getElementById('reviewsTable').querySelector('tbody').innerHTML = '';
-                this.state.reviewsData = [];
-            }
-            
             // Obter valores dos filtros
             const appId = document.getElementById('appId').value || this.state.currentAppId;
+            
+            if (!appId) {
+                alert('Por favor, insira o ID do aplicativo Steam.');
+                document.getElementById('reviewsLoader').style.display = 'none';
+                return;
+            }
+            
             const filter = document.getElementById('filter').value;
             const language = document.getElementById('language').value;
             const reviewType = document.getElementById('review_type').value;
@@ -231,14 +283,14 @@ const UI = {
             // Fazer a requisição para a API do Steam
             const data = await API.fetchSteamReviews(appId, params);
             
-            // Processar resultados
+            // Processar resultados - agora todos os dados acumulados estão em data.reviews
             this.processReviewsData(data);
             
             // Atualizar cursor para próxima página
             this.state.reviewsCursor = data.cursor;
             
             // Mostrar ou ocultar botão "Carregar Mais"
-            if (data.reviews.length < numPerPage || !data.cursor) {
+            if (!data.cursor || data.reviews.length >= data.query_summary.total_reviews) {
                 document.getElementById('loadMore').style.display = 'none';
             } else {
                 document.getElementById('loadMore').style.display = 'block';
@@ -272,12 +324,15 @@ const UI = {
             return;
         }
         
-        // Armazenar reviews
-        this.state.reviewsData = this.state.reviewsData.concat(data.reviews);
+        // Atualizar dados globais
+        this.state.reviewsData = data.reviews;
         
         // Atualizar tabela com reviews
+        // Limpar a tabela primeiro
         const tbody = document.getElementById('reviewsTable').querySelector('tbody');
+        tbody.innerHTML = '';
         
+        // Adicionar todas as reviews à tabela
         data.reviews.forEach(review => {
             const row = document.createElement('tr');
             
@@ -286,8 +341,10 @@ const UI = {
             const formattedDate = reviewDate.toLocaleDateString();
             
             // Formatar tempo de jogo
-            const hours = Math.floor(review.playtime_forever / 60);
-            const minutes = review.playtime_forever % 60;
+            // Garantir que o valor seja um número antes de calcular
+            const playtime = parseInt(review.playtime_forever) || 0;
+            const hours = Math.floor(playtime / 60);
+            const minutes = playtime % 60;
             const formattedPlaytime = `${hours}h ${minutes}m`;
             
             // Criar células da tabela
@@ -311,14 +368,22 @@ const UI = {
             });
         });
         
-        // Atualizar resumo de reviews
-        this.updateReviewsSummary(data.query_summary);
+        // Atualizar resumo de reviews com os totais corretos da API
+        this.updateReviewsSummary({
+            review_score_desc: data.query_summary.review_score_desc,
+            total_positive: data.query_summary.total_positive,
+            total_negative: data.query_summary.total_negative,
+            total_reviews: data.query_summary.total_reviews
+        });
         
         // Atualizar estatísticas de idioma
         this.updateLanguageStats();
         
-        // Atualizar gráfico de reviews
-        CHARTS.updateReviewsChart(data.query_summary);
+        // Atualizar gráfico de reviews com os totais corretos
+        CHARTS.updateReviewsChart({
+            total_positive: data.query_summary.total_positive,
+            total_negative: data.query_summary.total_negative
+        });
     },
     
     /**
@@ -333,10 +398,17 @@ const UI = {
         const reviewDate = new Date(review.timestamp_created * 1000);
         const formattedDate = reviewDate.toLocaleDateString() + ' ' + reviewDate.toLocaleTimeString();
         
-        // Formatar tempo de jogo
-        const hours = Math.floor(review.playtime_forever / 60);
-        const minutes = review.playtime_forever % 60;
+        // Formatar tempo de jogo (verificando se é um número válido)
+        const playtime = parseInt(review.playtime_forever) || 0;
+        const hours = Math.floor(playtime / 60);
+        const minutes = playtime % 60;
         const formattedPlaytime = `${hours}h ${minutes}m`;
+        
+        // Formatar tempo de jogo na review (verificando se é um número válido)
+        const playtimeAtReview = parseInt(review.playtime_at_review) || 0;
+        const hoursAtReview = Math.floor(playtimeAtReview / 60);
+        const minutesAtReview = playtimeAtReview % 60;
+        const formattedPlaytimeAtReview = `${hoursAtReview}h ${minutesAtReview}m`;
         
         // Criar HTML com detalhes da review
         detailsContainer.innerHTML = `
@@ -346,7 +418,7 @@ const UI = {
                 <p><strong>Data:</strong> ${formattedDate}</p>
                 <p><strong>Idioma:</strong> ${review.language}</p>
                 <p><strong>Tempo de Jogo:</strong> ${formattedPlaytime}</p>
-                <p><strong>Tempo de Jogo na Review:</strong> ${Math.floor(review.playtime_at_review / 60)}h ${review.playtime_at_review % 60}m</p>
+                <p><strong>Tempo de Jogo na Review:</strong> ${formattedPlaytimeAtReview}</p>
                 <p><strong>Votos Úteis:</strong> ${review.votes_up}</p>
                 <p><strong>Votos Engraçados:</strong> ${review.votes_funny}</p>
                 <p><strong>Comprado no Steam:</strong> ${review.steam_purchase ? 'Sim' : 'Não'}</p>
@@ -400,7 +472,7 @@ const UI = {
                 Review: "${review.review}"
                 Recomendado: ${review.voted_up ? 'Sim' : 'Não'}
                 Idioma: ${review.language}
-                Tempo de jogo: ${Math.floor(review.playtime_forever / 60)} horas
+                Tempo de jogo: ${Math.floor(parseInt(review.playtime_forever || 0) / 60)} horas
                 
                 Forneça:
                 1. Uma classificação de sentimento (Positivo, Neutro ou Negativo)
@@ -587,9 +659,7 @@ const UI = {
         }
     },
     
-    /**
-     * Gera resumo de reviews com IA
-     */
+    // Os métodos restantes permanecem iguais...
     async generateAiSummary() {
         try {
             // Verificar se tem reviews carregadas
@@ -670,9 +740,6 @@ const UI = {
         }
     },
     
-    /**
-     * Realiza análise de sentimento
-     */
     async performSentimentAnalysis() {
         try {
             // Verificar se tem reviews carregadas
@@ -819,9 +886,6 @@ const UI = {
         }
     },
     
-    /**
-     * Realiza extração de tópicos
-     */
     async performTopicExtraction() {
         try {
             // Verificar se tem reviews carregadas
@@ -975,9 +1039,6 @@ const UI = {
         }
     },
     
-    /**
-     * Gera recomendações baseadas nas reviews
-     */
     async generateRecommendations() {
         try {
             // Verificar se tem reviews carregadas
@@ -1053,9 +1114,6 @@ const UI = {
         }
     },
     
-    /**
-     * Gera relatório completo
-     */
     async generateFullReport() {
         try {
             // Verificar se tem reviews carregadas
@@ -1162,7 +1220,7 @@ const UI = {
                         positive: review.voted_up,
                         language: review.language,
                         date: new Date(review.timestamp_created * 1000).toISOString(),
-                        playtime: review.author.playtime_forever,
+                        playtime: review.playtime_forever,
                         text: review.review,
                         votes_up: review.votes_up,
                         votes_funny: review.votes_funny
@@ -1171,7 +1229,7 @@ const UI = {
                 
                 // Mostrar resumo do relatório
                 reportSummary.innerHTML = `
-                    <h3>Relatório de Análise de Reviews - Chessarama</h3>
+                    <h3>Relatório de Análise de Reviews</h3>
                     <p><strong>Data do Relatório:</strong> ${new Date().toLocaleDateString()}</p>
                     <p><strong>Total de Reviews Analisadas:</strong> ${this.state.reviewsData.length}</p>
                     <p><strong>Sentimento Geral:</strong> ${positivePercentage}% Positivo</p>
