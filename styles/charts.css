@@ -1,0 +1,78 @@
+/* Estilos específicos para gráficos */
+
+.chart-container {
+    height: 300px;
+    margin-bottom: 20px;
+    background-color: rgba(27, 40, 56, 0.4);
+    padding: 15px;
+    border-radius: 5px;
+    border: 1px solid var(--steam-blue-lighter);
+}
+
+/* Cores personalizadas para os gráficos */
+:root {
+    /* Cores para gráfico de sentimento */
+    --chart-very-positive: #4CAF50;
+    --chart-positive: #8BC34A;
+    --chart-neutral: #FFC107;
+    --chart-negative: #FF9800;
+    --chart-very-negative: #F44336;
+    
+    /* Cores para gráfico de tópicos */
+    --chart-positive-area: rgba(92, 126, 16, 0.2);
+    --chart-positive-border: rgba(92, 126, 16, 1);
+    --chart-negative-area: rgba(201, 74, 74, 0.2);
+    --chart-negative-border: rgba(201, 74, 74, 1);
+}
+
+/* Animações para gráficos */
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.chart-container canvas {
+    animation: fadeIn 0.8s ease-in-out;
+}
+
+/* Legendas de gráficos */
+.chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+    margin-top: 10px;
+    justify-content: center;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+}
+
+.legend-color {
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    margin-right: 5px;
+}
+
+/* Tooltips personalizadas */
+.custom-tooltip {
+    background-color: var(--steam-blue);
+    border: 1px solid var(--steam-blue-lighter);
+    border-radius: 4px;
+    color: var(--steam-gray);
+    padding: 8px 12px;
+    font-size: 14px;
+    pointer-events: none;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    z-index: 100;
+}
+
+/* Responsividade para gráficos */
+@media (max-width: 768px) {
+    .chart-container {
+        height: 250px; /* Altura menor em dispositivos móveis */
+    }
+}

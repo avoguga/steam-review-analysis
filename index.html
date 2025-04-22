@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steam Reviews Analyzer</title>
+    <!-- Bibliotecas externas -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.3.4/axios.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Estilos da aplicação -->
+    <link rel="stylesheet" href="./styles/main.css">
+    <link rel="stylesheet" href="./styles/charts.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo">
+                <h1>Steam Reviews Analyzer</h1>
+                <p>Análise de reviews com integração de IA</p>
+            </div>
+            <div class="actions">
+                <button id="saveToExcel">Exportar para Excel</button>
+            </div>
+        </header>
+        
+        <div class="tabs">
+            <button class="tab active" data-tab="reviews">Reviews</button>
+            <button class="tab" data-tab="ai-integration">Integração IA</button>
+            <button class="tab" data-tab="reports">Relatórios</button>
+            <button class="tab" data-tab="settings">Configurações</button>
+        </div>
+        
+        <div id="reviews" class="panel active">
+            <div class="input-group">
+                <label for="appId">ID do App:</label>
+                <input type="text" id="appId" value="1831830" placeholder="Ex: 1831830 para Chessarama">
+                <button id="getReviews" style="margin-left: 10px;">Obter Reviews</button>
+            </div>
+            
+            <div class="input-group">
+                <label for="filter">Filtro:</label>
+                <select id="filter">
+                    <option value="all">Todos (ordenar por utilidade)</option>
+                    <option value="recent">Recentes (ordenar por data)</option>
+                    <option value="updated">Atualizados (ordenar por atualização)</option>
+                </select>
+                
+                <label for="language" style="margin-left: 20px;">Idioma:</label>
+                <select id="language">
+                    <option value="all">Todos</option>
+                    <option value="brazilian">Português (Brasil)</option>
+                    <option value="english">Inglês</option>
+                    <option value="spanish">Espanhol</option>
+                    <option value="french">Francês</option>
+                    <option value="german">Alemão</option>
+                </select>
+                
+                <label for="review_type" style="margin-left: 20px;">Tipo:</label>
+                <select id="review_type">
+                    <option value="all">Todos</option>
+                    <option value="positive">Positivos</option>
+                    <option value="negative">Negativos</option>
+                </select>
+            </div>
+            
+            <div class="grid-container">
+                <div>
+                    <div class="summary-card">
+                        <h3>Resumo das Reviews</h3>
+                        <p id="reviewSummary">Carregue os dados para ver o resumo.</p>
+                    </div>
+                    
+                    <div class="summary-card">
+                        <h3>Reviews por Idioma</h3>
+                        <div id="languageStats" class="language-stats">
+                            <!-- Language stats will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="chart-container">
+                        <canvas id="reviewsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="loader" id="reviewsLoader"></div>
+            
+            <table class="reviews-table" id="reviewsTable">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Avaliação</th>
+                        <th>Idioma</th>
+                        <th>Data</th>
+                        <th>Tempo de Jogo</th>
+                        <th>Votos Úteis</th>
+                        <th>Texto</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Reviews will be populated here -->
+                </tbody>
+            </table>
+            
+            <div id="pagination" style="margin-top: 20px; text-align: center;">
+                <button id="loadMore" class="secondary" style="display: none;">Carregar Mais</button>
+            </div>
+        </div>
+        
+        <div id="ai-integration" class="panel">
+            <div class="ai-config">
+                <h3>Configuração de APIs de IA</h3>
+                
+                <div class="input-group">
+                    <label for="aiProvider">Provedor de IA:</label>
+                    <select id="aiProvider">
+                        <option value="openai">OpenAI (ChatGPT)</option>
+                        <option value="anthropic">Anthropic (Claude)</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="apiKey">Chave de API:</label>
+                    <input type="password" id="apiKey" placeholder="Insira sua chave de API">
+                </div>
+                
+                <div class="input-group">
+                    <label for="aiModel">Modelo:</label>
+                    <select id="aiModel">
+                        <option value="gpt-4">GPT-4</option>
+                        <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                        <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <button id="saveApiSettings">Salvar Configurações</button>
+                    <button id="testApiConnection" class="secondary" style="margin-left: 10px;">Testar Conexão</button>
+                </div>
+            </div>
+            
+            <div class="ai-actions">
+                <h3>Ações com IA</h3>
+                
+                <div class="input-group">
+                    <button id="generateSummary">Gerar Resumo de Reviews</button>
+                    <button id="sentimentAnalysis" style="margin-left: 10px;">Análise de Sentimento</button>
+                </div>
+                
+                <div class="input-group">
+                    <button id="topicExtraction">Extração de Tópicos</button>
+                    <button id="generateRecommendations" style="margin-left: 10px;">Gerar Recomendações</button>
+                </div>
+            </div>
+            
+            <div class="ai-results" id="aiResults" style="margin-top: 20px;">
+                <div class="summary-card">
+                    <h3>Resultados da IA</h3>
+                    <p>Execute uma ação com IA para ver os resultados.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div id="reports" class="panel">
+            <h3>Relatórios e Visualizações</h3>
+            
+            <div class="input-group">
+                <button id="generateReport">Gerar Relatório Completo</button>
+                <button id="saveReportToExcel" style="margin-left: 10px;">Exportar Relatório</button>
+            </div>
+            
+            <div class="grid-container" style="margin-top: 20px;">
+                <div>
+                    <div class="chart-container">
+                        <canvas id="sentimentChart"></canvas>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="chart-container">
+                        <canvas id="topicsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary-card" id="reportSummary">
+                <h3>Resumo do Relatório</h3>
+                <p>Gere um relatório para ver o resumo.</p>
+            </div>
+        </div>
+        
+        <div id="settings" class="panel">
+            <div class="ai-config">
+                <h3>Configurações do Aplicativo</h3>
+                
+                <div class="input-group">
+                    <label for="defaultAppId">ID do App Padrão:</label>
+                    <input type="text" id="defaultAppId" value="1831830" placeholder="Ex: 1831830 para Chessarama">
+                </div>
+                
+                <div class="input-group">
+                    <label for="reviewsPerPage">Reviews por Página:</label>
+                    <select id="reviewsPerPage">
+                        <option value="20">20 (padrão)</option>
+                        <option value="40">40</option>
+                        <option value="60">60</option>
+                        <option value="100">100 (máximo)</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <label for="theme">Tema:</label>
+                    <select id="theme">
+                        <option value="dark">Escuro (padrão)</option>
+                        <option value="light">Claro</option>
+                    </select>
+                </div>
+                
+                <div class="input-group">
+                    <button id="saveSettings">Salvar Configurações</button>
+                    <button id="resetSettings" class="secondary" style="margin-left: 10px;">Restaurar Padrões</button>
+                </div>
+            </div>
+            
+            <div class="ai-config" style="margin-top: 20px;">
+                <h3>Sobre o Aplicativo</h3>
+                <p>Steam Reviews Analyzer é uma ferramenta que permite analisar reviews de jogos do Steam e utilizar inteligência artificial para gerar insights valiosos sobre a opinião dos jogadores.</p>
+                <p>Versão: 1.0.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal for Review Details -->
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Detalhes da Review</h2>
+            <div id="reviewDetails"></div>
+        </div>
+    </div>
+    
+    <!-- JavaScript modularizado -->
+    <script src="./js/config.js"></script>
+    <script src="./js/api.js"></script>
+    <script src="./js/ui.js"></script>
+    <script src="./js/charts.js"></script>
+    <script src="./js/export.js"></script>
+    <script src="./js/main.js"></script>
+</body>
+</html>
